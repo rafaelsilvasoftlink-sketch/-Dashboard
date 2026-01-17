@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Logístico Futurista</title>
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #ffffff;
+            font-family: 'Orbitron', sans-serif;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+            animation: glow 2s infinite alternate;
+        }
+
+        @keyframes glow {
+            0% { text-shadow: 0 0 5px #00ffff; }
+            100% { text-shadow: 0 0 15px #00ffff; }
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid #00ffff;
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            transition: transform 0.3s;
+            position: relative;
+        }
+
+        .chart-container:hover {
+            transform: scale(1.05);
+        }
+
+        canvas {
+            width: 100% !important;
+            height: 320px !important;
+        }
+
+        .filters {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .filter-group {
+            margin: 10px;
+            display: inline-block;
+        }
+
+        .filter-group label {
+            font-size: 1.2em;
+            color: #00ffff;
+        }
+
+        .filter-btn {
+            background: linear-gradient(45deg, #00ffff, #ff00ff);
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Orbitron', sans-serif;
+            transition: all 0.3s;
+        }
+
+        .filter-btn.selected {
+            background: linear-gradient(45deg, #ff00ff, #00ffff);
+            box-shadow: 0 0 15px #ff00ff;
+        }
+
+        .filter-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .map-note {
+            font-size: 0.9em;
+            text-align: center;
+            color: #a0f0ff;
+            margin-top: 5px;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo@4.1.1/dist/chartjs-chart-geo.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1>Dashboard Logístico Futurista</h1>
+
+    <div class="filters">
+        <div class="filter-group">
+            <label>Regiões:</label>
+            <button class="filter-btn" data-type="region" data-value="Norte">Norte</button>
+            <button class="filter-btn" data-type="region" data-value="Sul">Sul</button>
+            <button class="filter-btn" data-type="region" data-value="Leste">Leste</button>
+            <button class="filter-btn" data-type="region" data-value="Oeste">Oeste</button>
+        </div>
+        <div class="filter-group">
+            <label>Períodos:</label>
+            <button class="filter-btn" data-type="period" data-value="Q1">Q1</button>
+            <button class="filter-btn" data-type="period" data-value="Q2">Q2</button>
+            <button class="filter-btn" data-type="period" data-value="Q3">Q3</button>
+            <button class="filter-btn" data-type="period" data-value="Q4">Q4</button>
+        </div>
+        <div class="filter-group">
+            <label>Tipos de Envio:</label>
+            <button class="filter-btn" data-type="type" data-value="Aéreo">Aéreo</button>
+            <button class="filter-btn" data-type="type" data-value="Terrestre">Terrestre</button>
+            <button class="filter-btn" data-type="type" data-value="Marítimo">Marítimo</button>
+        </div>
+    </div>
+
+    <div class="dashboard">
+        <div class="chart-container"><canvas id="chart1"></canvas><p>Envios por Região</p></div>
+        <div class="chart-container"><canvas id="chart2"></canvas><p>Entregas ao Longo do Tempo</p></div>
+        <div class="chart-container"><canvas id="chart3"></canvas><p>Distribuição de Status</p></div>
+        <div class="chart-container"><canvas id="chart4"></canvas><p>Níveis de Inventário por Produto</p></div>
+        <div class="chart-container"><canvas id="chart5"></canvas><p>Repartição de Custos</p></div>
+        <div class="chart-container">
+            <canvas id="chart6"></canvas>
+            <p>Lucro por Região (Mapa)</p>
+            <div class="map-note">Valores fictícios em R$ mil</div>
+        </div>
+    </div>
+
+    <script>
+        // Definições
+        const regions = ['Norte', 'Sul', 'Leste', 'Oeste'];
+        const periods = ['Q1', 'Q2', 'Q3', 'Q4'];
+        const types = ['Aéreo', 'Terrestre', 'Marítimo'];
+        const statuses = ['Entregue', 'Em Trânsito', 'Atrasado', 'Cancelado'];
+        const products = ['Produto A', 'Produto B', 'Produto C'];
+
+        // Dados fictícios - 10.000 envios
+        let dataset = [];
+        for (let i = 0; i < 10000; i++) {
+            const revenue = Math.floor(Math.random() * 1800) + 200; // Receita por envio
+            const cost = Math.floor(Math.random() * 900) + 100;
+            const profit = revenue - cost;
+
+            dataset.push({
+                date: `2023-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+                region: regions[Math.floor(Math.random() * regions.length)],
+                period: periods[Math.floor(Math.random() * periods.length)],
+                type: types[Math.floor(Math.random() * types.length)],
+                product: products[Math.floor(Math.random() * products.length)],
+                status: statuses[Math.floor(Math.random() * statuses.length)],
+                cost: cost,
+                revenue: revenue,
+                profit: profit,
+                delivery_time: Math.floor(Math.random() * 9) + 1
+            });
+        }
+
+        // Filtros
+        let selectedFilters = {
+            region: [],
+            period: [],
+            type: []
+        };
+
+        function getFilteredData() {
+            return dataset.filter(item => 
+                (selectedFilters.region.length === 0 || selectedFilters.region.includes(item.region)) &&
+                (selectedFilters.period.length === 0 || selectedFilters.period.includes(item.period)) &&
+                (selectedFilters.type.length === 0 || selectedFilters.type.includes(item.type))
+            );
+        }
+
+        function aggregateData(filtered) {
+            if (filtered.length === 0) {
+                return {
+                    shipmentsPerRegion: { labels: regions, data: [0,0,0,0] },
+                    deliveriesOverTime: { labels: periods, data: [0,0,0,0] },
+                    statusPie: { labels: statuses, data: [0,0,0,0] },
+                    inventoryLevels: { labels: products, data: [0,0,0] },
+                    costBreakdown: { labels: types, data: [0,0,0] },
+                    profitByRegion: { labels: regions, data: [0,0,0,0] }
+                };
+            }
+
+            const countBy = (arr, key) => arr.reduce((acc, item) => {
+                acc[item[key]] = (acc[item[key]] || 0) + 1;
+                return acc;
+            }, {});
+
+            const sumBy = (arr, groupKey, sumKey) => arr.reduce((acc, item) => {
+                acc[item[groupKey]] = (acc[item[groupKey]] || 0) + (item[sumKey] || 0);
+                return acc;
+            }, {});
+
+            const shipmentsPerRegionData = regions.map(r => countBy(filtered, 'region')[r] || 0);
+            const deliveriesOverTimeData = periods.map(p => countBy(filtered, 'period')[p] || 0);
+            const statusPieData = statuses.map(s => countBy(filtered, 'status')[s] || 0);
+            const inventoryLevelsData = products.map(pr => countBy(filtered, 'product')[pr] || 0);
+            const costBreakdownData = types.map(t => sumBy(filtered, 'type', 'cost')[t] || 0);
+            const profitByRegionData = regions.map(r => Math.round((sumBy(filtered, 'region', 'profit')[r] || 0) / 1000)); // em mil
+
+            return {
+                shipmentsPerRegion: { labels: regions, data: shipmentsPerRegionData },
+                deliveriesOverTime: { labels: periods, data: deliveriesOverTimeData },
+                statusPie: { labels: statuses, data: statusPieData },
+                inventoryLevels: { labels: products, data: inventoryLevelsData },
+                costBreakdown: { labels: types, data: costBreakdownData },
+                profitByRegion: { labels: regions, data: profitByRegionData }
+            };
+        }
+
+        let charts = {};
+
+        function initCharts(aggData) {
+            // Gráfico 1 - Bar
+            charts.chart1 = new Chart(document.getElementById('chart1'), {
+                type: 'bar',
+                data: {
+                    labels: aggData.shipmentsPerRegion.labels,
+                    datasets: [{ label: 'Envios por Região', data: aggData.shipmentsPerRegion.data, backgroundColor: '#00ffff' }]
+                },
+                options: { scales: { y: { beginAtZero: true } } }
+            });
+
+            // Gráfico 2 - Line
+            charts.chart2 = new Chart(document.getElementById('chart2'), {
+                type: 'line',
+                data: {
+                    labels: aggData.deliveriesOverTime.labels,
+                    datasets: [{ label: 'Entregas ao Longo do Tempo', data: aggData.deliveriesOverTime.data, borderColor: '#ff00ff', fill: false }]
+                }
+            });
+
+            // Gráfico 3 - Pie
+            charts.chart3 = new Chart(document.getElementById('chart3'), {
+                type: 'pie',
+                data: {
+                    labels: aggData.statusPie.labels,
+                    datasets: [{ data: aggData.statusPie.data, backgroundColor: ['#00ffff', '#ff00ff', '#ffff00', '#ff0000'] }]
+                }
+            });
+
+            // Gráfico 4 - Doughnut
+            charts.chart4 = new Chart(document.getElementById('chart4'), {
+                type: 'doughnut',
+                data: {
+                    labels: aggData.inventoryLevels.labels,
+                    datasets: [{ data: aggData.inventoryLevels.data, backgroundColor: ['#00ffff', '#ff00ff', '#ffff00'] }]
+                }
+            });
+
+            // Gráfico 5 - Polar Area
+            charts.chart5 = new Chart(document.getElementById('chart5'), {
+                type: 'polarArea',
+                data: {
+                    labels: aggData.costBreakdown.labels,
+                    datasets: [{ data: aggData.costBreakdown.data, backgroundColor: ['#00ffff', '#ff00ff', '#ffff00'] }]
+                }
+            });
+
+            // Gráfico 6 - Mapa de Lucro por Região (usando bubble map simples com ChartGeo)
+            const profitColors = aggData.profitByRegion.data.map(v => {
+                if (v > 1500) return '#00ff00';
+                if (v > 800) return '#ffff00';
+                return '#ff4444';
+            });
+
+            charts.chart6 = new Chart(document.getElementById('chart6'), {
+                type: 'bubble',
+                data: {
+                    datasets: [{
+                        label: 'Lucro por Região (R$ mil)',
+                        data: [
+                            { x: -60, y: -10, r: aggData.profitByRegion.data[0]/30, region: 'Norte' },
+                            { x: -45,  y: -25, r: aggData.profitByRegion.data[1]/30, region: 'Sul'   },
+                            { x: -50,  y: -15, r: aggData.profitByRegion.data[2]/30, region: 'Leste'  },
+                            { x: -55,  y: -20, r: aggData.profitByRegion.data[3]/30, region: 'Oeste'  }
+                        ],
+                        backgroundColor: profitColors,
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.raw.region}: R$ ${Math.round(ctx.raw.r * 30 * 1000).toLocaleString()}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { display: false, min: -70, max: -40 },
+                        y: { display: false, min: -35, max: -5 }
+                    },
+                    aspectRatio: 1.2
+                }
+            });
+        }
+
+        function updateCharts() {
+            const filtered = getFilteredData();
+            const aggData = aggregateData(filtered);
+
+            ['chart1','chart2','chart3','chart4','chart5'].forEach((key, i) => {
+                const dataKey = Object.keys(aggData)[i];
+                charts[key].data.labels = aggData[dataKey].labels;
+                charts[key].data.datasets[0].data = aggData[dataKey].data;
+                charts[key].update();
+            });
+
+            // Atualizar mapa (bubble)
+            const profitData = aggData.profitByRegion.data;
+            const colors = profitData.map(v => v > 1500 ? '#00ff00' : v > 800 ? '#ffff00' : '#ff4444');
+            charts.chart6.data.datasets[0].data.forEach((d, i) => {
+                d.r = profitData[i] / 30;
+            });
+            charts.chart6.data.datasets[0].backgroundColor = colors;
+            charts.chart6.update();
+        }
+
+        // Eventos dos botões
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const type = btn.dataset.type;
+                const value = btn.dataset.value;
+
+                if (e.ctrlKey) {
+                    const index = selectedFilters[type].indexOf(value);
+                    if (index > -1) {
+                        selectedFilters[type].splice(index, 1);
+                        btn.classList.remove('selected');
+                    } else {
+                        selectedFilters[type].push(value);
+                        btn.classList.add('selected');
+                    }
+                } else {
+                    document.querySelectorAll(`[data-type="${type}"]`).forEach(b => b.classList.remove('selected'));
+                    selectedFilters[type] = [value];
+                    btn.classList.add('selected');
+                }
+
+                updateCharts();
+            });
+        });
+
+        // Inicialização
+        const initialAgg = aggregateData(dataset);
+        initCharts(initialAgg);
+    </script>
+</body>
+</html>
